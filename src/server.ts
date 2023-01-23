@@ -2,17 +2,16 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import * as nodemailer from "nodemailer";
+import { Client } from "pg";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 dotenv.config();
 
-// const PORT_NUMBER = process.env.PORT ?? 4000;
-import { Pool } from "pg";
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL ?? "4000",
-});
+const PORT_NUMBER = process.env.PORT ?? 4000;
+const client = new Client(process.env.DATABASE_URL);
+client.connect();
 
 // POST contact form
 app.post("/submit-form", (req, res) => {
@@ -41,7 +40,7 @@ app.post("/submit-form", (req, res) => {
       }
     );
     // Store the data in the database
-    pool.query(
+    client.query(
       "INSERT INTO contact_form (name, email, message) VALUES ($1, $2, $3)",
       [name, email, message],
       (error: Error | null) => {
@@ -75,6 +74,6 @@ const transporter = nodemailer.createTransport({
 //   }
 // });
 
-app.listen(pool, () => {
-  console.log(`Server is listening on port ${pool}!`);
+app.listen(PORT_NUMBER, () => {
+  console.log(`Server is listening on port ${PORT_NUMBER}!`);
 });
