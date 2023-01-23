@@ -1,84 +1,80 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import {
-  addDummyDbItems,
-  addDbItem,
-  getAllDbItems,
-  getDbItemById,
-  DbItem,
-  updateDbItemById,
-} from "./db";
-import filePath from "./filePath";
-
-// loading in some dummy items into the database
-// (comment out if desired, or change the number)
-addDummyDbItems(20);
+import * as nodemailer from "nodemailer";
 
 const app = express();
-
-/** Parses JSON data in a request automatically */
 app.use(express.json());
-/** To allow 'Cross-Origin Resource Sharing': https://en.wikipedia.org/wiki/Cross-origin_resource_sharing */
 app.use(cors());
-
-// read in contents of any environment variables in the .env file
 dotenv.config();
 
-// use the environment variable PORT, or 4000 as a fallback
-const PORT_NUMBER = process.env.PORT ?? 4000;
-
-// API info page
-app.get("/", (req, res) => {
-  const pathToFile = filePath("../public/index.html");
-  res.sendFile(pathToFile);
+// const PORT_NUMBER = process.env.PORT ?? 4000;
+import { Pool } from "pg";
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL ?? "4000",
 });
 
-// GET /items
-app.get("/items", (req, res) => {
-  const allSignatures = getAllDbItems();
-  res.status(200).json(allSignatures);
-});
-
-// POST /items
-app.post<{}, {}, DbItem>("/items", (req, res) => {
-  // to be rigorous, ought to handle non-conforming request bodies
-  // ... but omitting this as a simplification
-  const postData = req.body;
-  const createdSignature = addDbItem(postData);
-  res.status(201).json(createdSignature);
-});
-
-// GET /items/:id
-app.get<{ id: string }>("/items/:id", (req, res) => {
-  const matchingSignature = getDbItemById(parseInt(req.params.id));
-  if (matchingSignature === "not found") {
-    res.status(404).json(matchingSignature);
-  } else {
-    res.status(200).json(matchingSignature);
+// POST contact form
+app.post("/submit-form", (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+    if (!name || !email || !message) {
+      throw new Error("All fields are required");
+    }
+    // Create the mailOptions object
+    const mailOptions = {
+      from: "youremail@gmail.com",
+      to: "recipient@gmail.com",
+      subject: "New message from " + name,
+      text: message + "\n\n" + "Email: " + email,
+    };
+    // Send the email
+    transporter.sendMail(
+      mailOptions,
+      function (error: Error | null, info: nodemailer.SentMessageInfo) {
+        if (error) {
+          console.log(error);
+          throw new Error("Error sending email");
+        } else {
+          console.log("Email sent: " + info.response);
+        }
+      }
+    );
+    // Store the data in the database
+    pool.query(
+      "INSERT INTO contact_form (name, email, message) VALUES ($1, $2, $3)",
+      [name, email, message],
+      (error: Error | null) => {
+        if (error) {
+          console.log(error);
+          throw new Error("Error storing data in database");
+        }
+      }
+    );
+    // Send a success response to the client
+    res.status(200).json({ message: "Form submitted successfully" });
+  } catch (error) {
+    console.log(error);
+    res.status(400).json({ message: (error as Error).message });
   }
 });
 
-// DELETE /items/:id
-app.delete<{ id: string }>("/items/:id", (req, res) => {
-  const matchingSignature = getDbItemById(parseInt(req.params.id));
-  if (matchingSignature === "not found") {
-    res.status(404).json(matchingSignature);
-  } else {
-    res.status(200).json(matchingSignature);
-  }
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
+  },
 });
 
-// PATCH /items/:id
-app.patch<{ id: string }, {}, Partial<DbItem>>("/items/:id", (req, res) => {
-  const matchingSignature = updateDbItemById(parseInt(req.params.id), req.body);
-  if (matchingSignature === "not found") {
-    res.status(404).json(matchingSignature);
-  } else {
-    res.status(200).json(matchingSignature);
-  }
-});
+// transporter.sendMail(mailOptions, function (error, info) {
+//   if (error) {
+//     console.log(error);
+//   } else {
+//     console.log("Email sent: " + info.response);
+//   }
+// });
 
-app.listen(PORT_NUMBER, () => {
-  console.log(`Server is listening on port ${PORT_NUMBER}!`);
+app.listen(pool, () => {
+  console.log(`Server is listening on port ${pool}!`);
 });
